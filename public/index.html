@@ -109,7 +109,7 @@
 
 <div id="dimLayer"></div>
 <img id="zoomImg" alt="">
-<video id="zoomVid" muted loop playsinline></video>
+<video id="zoomVid" muted loop playsinline crossorigin="anonymous"></video>
 <div class="empty" id="emptyState">
   <div class="brand-lg">Wrong ir skeneris</div>
   <p>Ielādēju darbus…</p>
@@ -191,7 +191,7 @@ const isVideo=it=>it && (it.kind==='video' || /\.(mp4|webm|mov|m4v)(\?|$)/i.test
 
 function videoElementFor(src){
   const v=document.createElement('video');
-  v.src=src; v.muted=true; v.loop=true; v.playsInline=true; v.autoplay=true; v.preload='auto';
+  v.crossOrigin='anonymous'; v.src=src; v.muted=true; v.loop=true; v.playsInline=true; v.autoplay=true; v.preload='auto';
   v.setAttribute('muted',''); v.setAttribute('playsinline','');
   v.play().catch(()=>{});
   return v;
