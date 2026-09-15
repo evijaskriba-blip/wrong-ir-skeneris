@@ -17,7 +17,7 @@
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#fff; --ink:#131313; --ink-dim:#6E6E6E; --ink-faint:#B4B4B4; --line:#E4E4E4; } }
   :root[data-theme="dark"]{ --bg:#fff; --ink:#131313; --ink-dim:#6E6E6E; --ink-faint:#B4B4B4; --line:#E4E4E4; }
   *{box-sizing:border-box;}
-  html,body{height:100%;}
+  html,body{height:100%;overscroll-behavior:none;overscroll-behavior-x:none;}
   body{margin:0;background:var(--bg);color:var(--ink);
        font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
        overflow:hidden;-webkit-font-smoothing:antialiased;cursor:grab;}
@@ -486,7 +486,7 @@ addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault(); go(-1);}
   if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault(); go(1);}
 });
-let wl=false;
+let wl=false; addEventListener('wheel',e=>{ if(e.cancelable) e.preventDefault(); },{passive:false});
 addEventListener('wheel',e=>{
   if(!items.length||wl) return;
   const d=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY;
