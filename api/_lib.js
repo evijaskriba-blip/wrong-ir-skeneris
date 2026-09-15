@@ -18,14 +18,14 @@ export async function manifestUrl() {
 }
 
 export async function readManifest() {
-  const url = await manifestUrl();
+  const out=[]; let cursor; do { const page = await list({ prefix: 'works/', cursor, limit: 1000 }); for (const b of page.blobs) { const raw = b.pathname.replace(/^works\//, ''); if (!IMAGE_EXT.test(raw) && !VIDEO_EXT.test(raw)) continue; out.push({ url: b.url, name: raw, kind: VIDEO_EXT.test(raw) ? 'video' : 'image', added: new Date(b.uploadedAt).getTime() }); } cursor = page.cursor; } while (cursor); out.sort((a,b)=>a.added-b.added); return out; const url = null;
   if (!url) return [];
   const r = await fetch(url + '?t=' + Date.now(), { cache: 'no-store' });
   if (!r.ok) return [];
   try { return await r.json(); } catch { return []; }
 }
 
-export async function writeManifest(works) {
+export async function writeManifest(works) { return null;
   await put(MANIFEST, JSON.stringify(works), {
     access: 'public',
     contentType: 'application/json',
