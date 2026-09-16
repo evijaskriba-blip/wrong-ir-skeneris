@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wrong ir skeneris</title>
+<title>Wrong art gallery</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%96%A8%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
@@ -22,9 +23,9 @@
        font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
        overflow:hidden;-webkit-font-smoothing:antialiased;cursor:grab;}
   body.dragging{cursor:grabbing;}
-  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:10;}
   header{position:fixed;top:0;left:0;right:0;display:flex;flex-direction:column;align-items:center;
-         gap:clamp(24px,6.4vh,52px);padding:clamp(20px,5.6vh,46px) 20px 0;z-index:60;pointer-events:none;}
+         gap:clamp(24px,6.4vh,52px);padding:clamp(20px,5.6vh,46px) 20px 0;z-index:2;pointer-events:none;}
   #collection{font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-weight:400;
               font-size:clamp(28px,3.4vw,54px);line-height:1;color:var(--ink);letter-spacing:-0.01em;}
   @media (max-width:760px){ header{gap:22px;} }
@@ -48,16 +49,18 @@
   #zoomImg,#zoomVid{position:fixed;z-index:46;display:none;opacity:0;pointer-events:none;
            object-fit:fill;}
   #shelf{position:fixed;right:24px;bottom:74px;z-index:65;width:min(420px,calc(100vw - 48px));
+         max-height:calc(100vh - 110px);display:none;flex-direction:column;
          background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px 14px;
-         box-shadow:0 24px 60px -28px rgba(19,19,19,.45);display:none;}
-  #shelf.open{display:block;}
+         box-shadow:0 24px 60px -28px rgba(19,19,19,.45);}
+  #shelf.open{display:flex;}
   #shelfHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
   #shelfCount{font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-dim);letter-spacing:.04em;}
   #shelfClose{background:none;border:none;font-family:'Inter',sans-serif;font-size:11px;
               color:var(--ink-faint);cursor:pointer;padding:2px 0;border-bottom:1px solid transparent;}
   #shelfClose:hover{color:var(--ink);border-bottom-color:var(--ink);}
   #shelfGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;
-             max-height:52vh;overflow-y:auto;}
+             overflow-y:auto;overscroll-behavior:contain;min-height:0;flex:1;
+             -webkit-overflow-scrolling:touch;}
   .tile{position:relative;aspect-ratio:1;border:1px solid var(--line);border-radius:8px;
         overflow:hidden;cursor:pointer;background:#faf9f7;}
   .tile img,.tile video{width:100%;height:100%;object-fit:cover;display:block;}
@@ -77,7 +80,7 @@
   @media (max-width:760px){ #shelf{right:12px;left:12px;width:auto;bottom:70px;} }
   #fileInput{display:none;}
   .brandmark-wrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
-                  z-index:60;pointer-events:none;opacity:.9;}
+                  z-index:2;pointer-events:none;opacity:.9;}
   .brandmark{width:64px;height:auto;display:block;}
   @media (max-width:760px){ .brandmark{width:50px;} }
   .hint{position:fixed;bottom:24px;left:26px;z-index:60;display:flex;gap:18px;align-items:center;
@@ -146,7 +149,7 @@ const BEHIND=0.70;      // the wall behind the camera
 const SLOTS_N=10;       // more places around the room = works sit closer together
 const SEG_W=28, SEG_H=2;
 
-let items=[], cur=0, target=0, focusIdx=null, groups=[];
+let items=[], cur=0, vel=0, velT=0, snapTo=null, focusIdx=null, groups=[];
 let scene,camera,renderer,raycaster,pointer,ctxLost=false;
 let zoomIdx=null, zoomT=0, zoomE=0, zoomOn=null;
 
@@ -208,10 +211,20 @@ function initScene(){
   solveSlots();
   resize();
 }
+// On a narrow screen a 40-degree lens sees almost nothing sideways, so the room
+// looks like a wall with one picture. Widen the view and make the works smaller
+// so the side walls come into frame and it reads as a room again.
+let WORK_SCALE=1;
+function fitToScreen(){
+  const a=innerWidth/innerHeight;
+  camera.fov = a<1.35 ? Math.min(66, 40+(1.35-a)*34) : 40;
+  WORK_SCALE = a<1.35 ? Math.max(0.52, 0.52+(a-0.45)*0.53) : 1;
+}
+
 function resize(){
   const w=innerWidth,h=innerHeight;
   renderer.setSize(w,h,false);
-  camera.aspect=w/h; camera.updateProjectionMatrix();
+  camera.aspect=w/h; fitToScreen(); camera.updateProjectionMatrix();
   solveSlots();
   groups.forEach(g=>{ if(g.userData.tex) rebuildMesh(g); });
 }
@@ -222,6 +235,22 @@ function resize(){
 const DEPTH=FAR+BEHIND;
 const PERIM=4*SIDE+2*DEPTH;
 const SLOT=PERIM/SLOTS_N;
+
+// same walk, but writing into a holder that gets reused. Called for every point
+// of every work on every frame, so allocating here is what creates the churn.
+const _w1={x:0,z:0}, _w2={x:0,z:0}, _w3={x:0,z:0}, _w4={x:0,z:0};
+function walkInto(s,out){
+  let t=s % PERIM; if(t<0) t+=PERIM;
+  if(t<=SIDE){ out.x=t; out.z=-FAR; return out; }
+  t-=SIDE;
+  if(t<=DEPTH){ out.x=SIDE; out.z=-FAR+t; return out; }
+  t-=DEPTH;
+  if(t<=2*SIDE){ out.x=SIDE-t; out.z=BEHIND; return out; }
+  t-=2*SIDE;
+  if(t<=DEPTH){ out.x=-SIDE; out.z=BEHIND-t; return out; }
+  t-=DEPTH;
+  out.x=-SIDE+t; out.z=-FAR; return out;
+}
 
 function walk(s){
   let t=s % PERIM; if(t<0) t+=PERIM;
@@ -246,10 +275,10 @@ let SLOT_R=[0,1.48,3.34,4.55,5.9,7.2], SLOT_L=SLOT_R.slice();
 function widthAt(off){
   const n=items.length; if(!n) return H*0.92;
   let idx=-1;
-  for(let i=0;i<n;i++){ if(relOffset(i)===off){ idx=i; break; } }
+  for(let i=0;i<n;i++){ if(Math.round(relOffset(i))===off){ idx=i; break; } }
   const g=idx>=0?groups[idx]:null;
   const ar=(g&&g.userData.aspect)||1;
-  return H*ar;
+  return H*WORK_SCALE*ar;
 }
 
 function solveSide(sign){
@@ -269,16 +298,23 @@ function solveSide(sign){
   };
   const first=edges(0,widthAt(0)); if(!first) return null;
   const arcs=[0]; let prev=sign>0?first[1]:first[0];
+  const clears=(e)=> sign>0 ? e[0]>=prev+gap : e[1]<=prev-gap;
   for(let k=1;k<=5;k++){
     const w=widthAt(sign*k);
-    let a=arcs[k-1]+0.05, hit=null;
-    for(let i=0;i<3000;i++){
-      a+=0.005; if(a>PERIM/2) break;
+    let lo=arcs[k-1]+0.05, hi=null;
+    for(let a=lo; a<PERIM/2; a+=0.08){          // coarse sweep
       const e=edges(a,w); if(!e) break;
-      if(sign>0 ? e[0]>=prev+gap : e[1]<=prev-gap){ hit=a; prev=sign>0?e[1]:e[0]; break; }
+      if(clears(e)){ hi=a; break; }
+      lo=a;
     }
-    if(hit===null) break;
-    arcs.push(hit);
+    if(hi===null) break;
+    for(let i=0;i<10;i++){                      // then halve the gap ten times
+      const mid=(lo+hi)/2, e=edges(mid,w);
+      if(e&&clears(e)) hi=mid; else lo=mid;
+    }
+    const e=edges(hi,w); if(!e) break;
+    prev=sign>0?e[1]:e[0];
+    arcs.push(hi);
   }
   // keep whatever was solved. Throwing away a partial answer used to leave the
   // page on stale numbers from before the pictures had loaded, which is what
@@ -286,7 +322,7 @@ function solveSide(sign){
   return arcs.length>=2?arcs:null;
 }
 let resolveTimer=null;
-function resolveSoon(){ clearTimeout(resolveTimer); resolveTimer=setTimeout(solveSlots,60); }
+function resolveSoon(){ clearTimeout(resolveTimer); resolveTimer=setTimeout(solveSlots,120); }
 
 function solveSlots(){
   const step=PERIM/10;
@@ -299,15 +335,23 @@ function arcFor(o){
   const s=Math.sign(o)||1, a=Math.abs(o);
   const T=s>0?SLOT_R:SLOT_L, last=T.length-1;
   const step=T[last]-T[last-1];
-  const at=k=>k<=last?T[k]:T[last]+(k-last)*step;
+  // the resting places are unevenly spaced, so joining them with straight lines
+  // made the works change speed the moment they passed one. A smooth curve
+  // through the same places keeps the speed continuous.
+  const at=k=>k<0 ? -at(-k) : (k<=last ? T[k] : T[last]+(k-last)*step);
   const k=Math.floor(a), t=a-k;
-  return s*(at(k)+(at(k+1)-at(k))*t);
+  const p0=at(k-1), p1=at(k), p2=at(k+1), p3=at(k+2);
+  const v=0.5*((2*p1) + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t*t + (-p0+3*p1-3*p2+p3)*t*t*t);
+  return s*v;
 }
 
 // a flat sheet whose vertices we move onto the wall path every frame
 function sheetGeometry(w,h){
   const g=new THREE.PlaneGeometry(w,h,SEG_W,SEG_H);
   g.userData.w=w;
+  // the sheet is moved around the room every frame, so give it a bounding
+  // sphere big enough to always hold it and never recompute one mid-flight
+  g.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,0,-FAR/2), PERIM);
   return g;
 }
 
@@ -338,7 +382,7 @@ function captionTexture(text){
 }
 
 function rebuildMesh(g){
-  const ar=g.userData.aspect||1, h=H, w=h*ar;
+  const ar=g.userData.aspect||1, h=H*WORK_SCALE, w=h*ar;
   if(g.userData.art){ g.remove(g.userData.art); g.userData.art.geometry.dispose(); }
   const art=new THREE.Mesh(sheetGeometry(w,h),
     new THREE.MeshBasicMaterial({map:g.userData.tex,side:THREE.DoubleSide}));
@@ -349,9 +393,9 @@ function rebuildMesh(g){
   const label=(g.userData.item&&(g.userData.item.title||g.userData.item.name))||'';
   if(label){
     const tex=captionTexture(label);
-    const ch=H*0.075, cw=ch*(560/70);        // always the same size in the room
+    const ch=H*WORK_SCALE*0.075, cw=ch*(560/70);   // always the same size in the room
     const cg=new THREE.PlaneGeometry(cw,ch,24,1);
-    cg.translate(0,-H/2-0.042-ch/2,0);       // hang it just under the work
+    cg.translate(0,-H*WORK_SCALE/2-0.042*WORK_SCALE-ch/2,0);   // hang it just under the work
     const cap=new THREE.Mesh(cg,
       new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,transparent:true,opacity:0}));
     g.add(cap); g.userData.cap=cap; g.userData.capTex=tex; g.userData.capW=cw;
@@ -409,7 +453,6 @@ function relOffset(i){
   return o;
 }
 
-const _p=new THREE.Vector3();
 function place(){
   const n=items.length; if(!n) return;
   groups.forEach((g,i)=>{
@@ -423,7 +466,7 @@ function place(){
     const flat=(zoomOn===i)?zoomE:0;
     let tx=0,tz=0,cx=0,cz2=0;
     if(flat>0){
-      const c=walk(s0), l=walk(s0-0.01), r=walk(s0+0.01);
+      const c=walkInto(s0,_w2), l=walkInto(s0-0.01,_w3), r=walkInto(s0+0.01,_w4);
       tx=r.x-l.x; tz=r.z-l.z;
       const m=Math.hypot(tx,tz)||1; tx/=m; tz/=m;
       cx=c.x; cz2=c.z;
@@ -432,7 +475,7 @@ function place(){
     for(let k=0;k<pos.count;k++){
       const lx=geo.attributes.uv.getX(k)*w-w/2;   // where this column sits across the sheet
       const ly=pos.getY(k);
-      const p=walk(s0+lx);                        // ...and where that lands on the walls
+      const p=walkInto(s0+lx,_w1);                // ...and where that lands on the walls
       let px=p.x, pz=p.z;
       if(flat>0){
         px += ((cx+tx*lx)-px)*flat;
@@ -441,9 +484,8 @@ function place(){
       pos.setXYZ(k, px, ly, pz);
     }
     pos.needsUpdate=true;
-    geo.computeBoundingSphere();
 
-    const mid=walk(s0);
+    const mid=walkInto(s0,_w2);
     const off=Math.abs(relOffset(i));
     const behind=(mid.z>-0.45) || off>3.2;             // past the camera, or too far round
     g.visible=!behind;
@@ -457,12 +499,11 @@ function place(){
       const cpos=cap.geometry.attributes.position, cuv=cap.geometry.attributes.uv;
       for(let k=0;k<cpos.count;k++){
         const lx=cuv.getX(k)*cw;
-        const q=walk(start+lx);
+        const q=walkInto(start+lx,_w1);
         cpos.setXYZ(k, q.x, cpos.getY(k), q.z);
       }
       cpos.needsUpdate=true;
-      cap.geometry.computeBoundingSphere();
-      const mc=start+cw/2, c=walk(mc), cl=walk(mc-0.01), cr=walk(mc+0.01);
+      const mc=start+cw/2, c=walkInto(mc,_w2), cl=walkInto(mc-0.01,_w3), cr=walkInto(mc+0.01,_w4);
       let ctx=cr.x-cl.x, ctz=cr.z-cl.z; const cm=Math.hypot(ctx,ctz)||1; ctx/=cm; ctz/=cm;
       const cnx=-ctz, cnz=ctx;
       // how squarely you are looking at it: a caption edge-on is unreadable anyway
@@ -482,7 +523,7 @@ function place(){
 const dimLayer=$('dimLayer'), zoomImg=$('zoomImg'), zoomVid=$('zoomVid');
 const headerEl=document.querySelector('header'), markEl=document.querySelector('.brandmark-wrap');
 const _v=new THREE.Vector3();
-const camPos=new THREE.Vector3(), lookAt=new THREE.Vector3(), _t=new THREE.Vector3();
+const lookAt=new THREE.Vector3();
 
 // where the work lands on screen right now
 function screenRect(i){
@@ -503,7 +544,7 @@ function viewpointFor(i){
   const g=groups[i];
   const w=(g&&g.userData.art)?(g.userData.art.geometry.userData.w||1):1;
   const s0=arcFor(relOffset(i));
-  const c=walk(s0), l=walk(s0-0.01), r=walk(s0+0.01);
+  const c=walkInto(s0,_w2), l=walkInto(s0-0.01,_w3), r=walkInto(s0+0.01,_w4);
   // the wall's inward normal at that spot
   let nx=-(r.z-l.z), nz=(r.x-l.x);
   const m=Math.hypot(nx,nz)||1; nx/=m; nz/=m;
@@ -540,8 +581,8 @@ function driveCamera(){
     if(zoomVid.getAttribute('src')){ zoomVid.pause(); zoomVid.removeAttribute('src'); zoomVid.load(); }
     renderer.domElement.style.filter='none';
     dimLayer.style.opacity='0';
-    if(headerEl) headerEl.style.filter='none';
-    if(markEl) markEl.style.filter='none';
+    if(headerEl){ headerEl.style.filter='none'; headerEl.style.opacity=''; }
+    if(markEl){ markEl.style.filter='none'; markEl.style.opacity=''; }
     return;
   }
   const i=zoomIdx!==null?zoomIdx:lastZoomIdx;
@@ -560,9 +601,11 @@ function driveCamera(){
 
   // and the work itself is laid over it, sharp, exactly where it appears
   // the title and the mark soften along with the room
+  // walking up to a work, the titles fade away rather than hang around blurred
   const soften='blur('+(7*soft).toFixed(2)+'px)';
-  if(headerEl) headerEl.style.filter=soften;
-  if(markEl) markEl.style.filter=soften;
+  const fade=Math.max(0,1-e*1.6).toFixed(3);
+  if(headerEl){ headerEl.style.filter=soften; headerEl.style.opacity=fade; }
+  if(markEl){ markEl.style.filter=soften; markEl.style.opacity=fade; }
 
   const r=screenRect(i);
   if(r){
@@ -596,7 +639,7 @@ function activeIndex(){
 
 // ---- saving the gallery into the page itself -------------------------------
 // ---- navigation ------------------------------------------------------------
-function go(d){ if(focusIdx!==null) unzoom(); target+=d; }
+function go(d){ if(focusIdx!==null) unzoom(); snapTo=Math.round(snapTo===null?cur:snapTo)+d; vel=0; velT=0; }
 
 // walk round to a particular work by the shortest way
 function goToIndex(i){
@@ -604,7 +647,7 @@ function goToIndex(i){
   if(focusIdx!==null) unzoom();
   let o=((i-Math.round(cur))%n+n)%n;
   if(o>n/2) o-=n;
-  target=Math.round(cur)+o;
+  snapTo=Math.round(cur)+o; vel=0; velT=0;
 }
 function focusOn(i){
   if(focusIdx===i){ unzoom(); return; }
@@ -617,20 +660,34 @@ addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault(); go(-1);}
   if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault(); go(1);}
 });
-let wl=false;
 addEventListener('wheel',e=>{
-  // taking the event stops a sideways swipe turning into browser back/forward
   if(e.cancelable) e.preventDefault();
-  if(!items.length||wl) return;
+  if(shelf.contains(e.target)) return;          // let the list scroll on its own
+  if(!items.length) return;
   const d=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY;
-  if(Math.abs(d)<8) return;
-  wl=true; go(d>0?1:-1); setTimeout(()=>wl=false,430);
+  if(!d) return;
+  if(focusIdx!==null) unzoom();
+  // A mouse sends a few big clicks, a trackpad a stream of small ones. Treating
+  // each as a push into a moving weight makes both feel the same: it keeps
+  // gliding between clicks instead of stopping and starting.
+  velT += Math.sign(d)*Math.min(1,Math.abs(d)/110)*0.065;
+  snapTo=null;
 },{passive:false});
 
 let down=null, moved=false;
 function pDown(x,y,t){ if(t&&t.isContentEditable) return; down={x,y}; moved=false; document.body.classList.add('dragging'); }
-function pMove(x){ if(!down) return; const dx=x-down.x; if(!moved&&Math.abs(dx)>45){ moved=true; go(dx<0?1:-1); } }
-function pUp(x,y){ document.body.classList.remove('dragging'); if(down&&!moved) pick(x,y); down=null; }
+function pMove(x){
+  if(!down) return;
+  const dx=x-down.x;
+  if(Math.abs(dx)>4) moved=true;
+  if(moved){
+    if(focusIdx!==null) unzoom();
+    const step=(down.x-x)/(innerWidth*0.42);
+    cur+=step; vel=step; velT=0; snapTo=null;    // follow the hand
+    down.x=x;
+  }
+}
+function pUp(x,y){ document.body.classList.remove('dragging'); if(down&&!moved) pick(x,y); else if(moved) snapTo=null; down=null; }
 addEventListener('mousedown',e=>{ if(e.target.closest('button')) return; pDown(e.clientX,e.clientY,e.target); });
 addEventListener('mousemove',e=>pMove(e.clientX));
 addEventListener('mouseup',e=>pUp(e.clientX,e.clientY));
@@ -698,11 +755,18 @@ let lastKey=null;
 function tick(){
   requestAnimationFrame(tick);
   try{
-    cur += (target-cur)*0.075;
-    if(Math.abs(target-cur)<0.0006) cur=target;
+    velT*=0.94;                 // the push fades
+    vel += (velT-vel)*0.08;     // and the speed follows it gently
+    cur += vel;
+    if(snapTo===null && Math.abs(velT)<0.0008 && Math.abs(vel)<0.004) snapTo=Math.round(cur);
+    if(snapTo!==null){
+      cur += (snapTo-cur)*0.08;
+      vel*=0.6; velT=0;
+      if(Math.abs(snapTo-cur)<0.0006){ cur=snapTo; vel=0; }
+    }
     place(); driveCamera();
     const k=Math.round(cur)+'|'+focusIdx;
-    if(k!==lastKey){ lastKey=k; solveSlots(); updateUI(); }
+    if(k!==lastKey){ lastKey=k; resolveSoon(); updateUI(); }
     if(!ctxLost){
       renderer.render(scene,camera);
     }
@@ -730,7 +794,7 @@ fetch('/api/works?t='+Date.now(), {cache:'no-store'})
       kind:(typeof w==='object'&&w.kind)||'',
       name:tidyName((typeof w==='object'&&(w.title||w.name))||'')
     }))));
-    cur=target=0;
+    cur=0; vel=0; velT=0; snapTo=0;
     buildGroups(); updateUI();
     if(!items.length){
       const p=document.querySelector('.empty p');
