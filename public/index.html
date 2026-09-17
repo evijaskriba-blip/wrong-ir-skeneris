@@ -84,7 +84,7 @@
   #labels{position:fixed;inset:0;z-index:11;pointer-events:none;overflow:hidden;}
   #labels .lab{position:absolute;left:0;top:0;white-space:nowrap;
                font-family:'Inter',system-ui,sans-serif;color:var(--ink-dim);
-               transform-origin:0 0;will-change:transform;}
+               font-size:40px;line-height:1;transform-origin:0 0;will-change:transform;}
   #fileInput{display:none;}
   .brandmark-wrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
                   z-index:2;pointer-events:none;opacity:.9;}
@@ -402,7 +402,7 @@ function tidyName2(raw){
     .trim();
 }
 
-const labelBox=$('labels');
+const labelBox=$('labels'), LAB_BASE=40;
 function makeLabel(g,item){
   const text=tidyName2(item&&(item.title||item.name))||'bez nosaukuma';
   const el=document.createElement('div');
@@ -535,8 +535,8 @@ function place(){
           const ang=Math.atan2(sy2-sy1, sx2-sx1);
           const size=Math.max(7, Math.min(22, len*0.062));
           lab.style.display='block';
-          lab.style.fontSize=size.toFixed(2)+'px';
-          lab.style.transform='translate('+sx1.toFixed(1)+'px,'+sy1.toFixed(1)+'px) rotate('+ang.toFixed(4)+'rad)';
+          lab.style.fontSize=LAB_BASE+'px';
+          const STEP=0.5,LAB_EM=0.055*WORK_SCALE,o1=walkInto(s0-w/2,_w3);_v.set(o1.x,yy,o1.z).project(camera);const px0=(_v.x*0.5+0.5)*innerWidth,py0=(-_v.y*0.5+0.5)*innerHeight,pz0=_v.z;const o2=walkInto(s0-w/2+STEP,_w4);_v.set(o2.x,yy,o2.z).project(camera);const pxX=(_v.x*0.5+0.5)*innerWidth,pyX=(-_v.y*0.5+0.5)*innerHeight;_v.set(o1.x,yy+STEP,o1.z).project(camera);const pxY=(_v.x*0.5+0.5)*innerWidth,pyY=(-_v.y*0.5+0.5)*innerHeight;const kk=LAB_EM/(LAB_BASE*STEP),a1=(pxX-px0)*kk,b1=(pyX-py0)*kk,c1=-(pxY-px0)*kk,d1=-(pyY-py0)*kk;if(pz0>1||!isFinite(a1)||Math.hypot(a1,b1)<0.001){lab.style.display='none';}else{lab.style.transform='matrix('+a1.toFixed(4)+','+b1.toFixed(4)+','+c1.toFixed(4)+','+d1.toFixed(4)+','+px0.toFixed(1)+','+py0.toFixed(1)+')';}
         }
       }
     }
@@ -607,7 +607,7 @@ function driveCamera(){
     renderer.domElement.style.filter='none';
     dimLayer.style.opacity='0';
     if(headerEl){ headerEl.style.filter='none'; headerEl.style.opacity=''; }
-    if(markEl){ markEl.style.filter='none'; markEl.style.opacity=''; }
+    if(markEl){ markEl.style.filter='none'; markEl.style.opacity=''; } if(labelBox){ labelBox.style.filter='none'; labelBox.style.opacity=''; }
     return;
   }
   const i=zoomIdx!==null?zoomIdx:lastZoomIdx;
@@ -630,7 +630,7 @@ function driveCamera(){
   const soften='blur('+(7*soft).toFixed(2)+'px)';
   const fade=Math.max(0,1-e*1.6).toFixed(3);
   if(headerEl){ headerEl.style.filter=soften; headerEl.style.opacity=fade; }
-  if(markEl){ markEl.style.filter=soften; markEl.style.opacity=fade; }
+  if(markEl){ markEl.style.filter=soften; markEl.style.opacity=fade; } if(labelBox){ labelBox.style.filter=soften; labelBox.style.opacity=fade; }
 
   const r=screenRect(i);
   if(r){
