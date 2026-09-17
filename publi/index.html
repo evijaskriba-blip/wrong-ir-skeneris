@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wrong art gallery</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%96%A8%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#fff;
+         --ink:#131313;        /* Wrong Black    */
+         --ink-dim:#6E6E6E;    /* Wrong Black 90 */
+         --ink-faint:#B4B4B4;
+         --line:#E4E4E4;
+         --accent:#FF4A40;     /* Wrong Red      */ }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#fff; --ink:#131313; --ink-dim:#6E6E6E; --ink-faint:#B4B4B4; --line:#E4E4E4; } }
+  :root[data-theme="dark"]{ --bg:#fff; --ink:#131313; --ink-dim:#6E6E6E; --ink-faint:#B4B4B4; --line:#E4E4E4; }
+  *{box-sizing:border-box;}
+  html,body{height:100%;overscroll-behavior:none;overscroll-behavior-x:none;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
+       overflow:hidden;-webkit-font-smoothing:antialiased;cursor:grab;}
+  body.dragging{cursor:grabbing;}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:10;}
+  header{position:fixed;top:0;left:0;right:0;display:flex;flex-direction:column;align-items:center;
+         gap:clamp(24px,6.4vh,52px);padding:clamp(20px,5.6vh,46px) 20px 0;z-index:2;pointer-events:none;}
+  #collection{font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-weight:400;
+              font-size:clamp(28px,3.4vw,54px);line-height:1;color:var(--ink);letter-spacing:-0.01em;}
+  @media (max-width:760px){ header{gap:22px;} }
+  .logo-img{width:clamp(108px,8.4vw,168px);height:auto;display:block;user-select:none;-webkit-user-drag:none;}
+  @media (max-width:760px){ .logo-img{width:min(52vw,190px);} }
+  .counter{position:fixed;top:28px;right:26px;font-size:11px;color:var(--ink-faint);
+           letter-spacing:.05em;z-index:60;}
+  .empty{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+         justify-content:center;text-align:center;gap:18px;padding:0 10vw;z-index:20;}
+  .empty .brand-lg{font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-size:36px;color:var(--ink);}
+  .empty p{color:var(--ink-dim);font-size:13px;max-width:320px;line-height:1.6;margin:0;}
+  .add-fab{position:fixed;bottom:22px;right:24px;z-index:61;display:flex;align-items:center;
+           gap:8px;background:#fff;border:1px solid var(--ink);color:var(--ink);
+           font-family:'Inter',sans-serif;font-size:12px;padding:10px 16px;border-radius:999px;
+           cursor:pointer;transition:background .18s ease,color .18s ease;}
+  .add-fab:hover{background:var(--ink);color:#fff;}
+  .add-fab svg{width:12px;height:12px;}
+  #dimLayer{position:fixed;inset:0;z-index:45;background:#131313;
+            opacity:0;pointer-events:none;}
+  body.zoomed #dimLayer{pointer-events:auto;}
+  #zoomImg,#zoomVid{position:fixed;z-index:46;display:none;opacity:0;pointer-events:none;
+           object-fit:fill;}
+  #shelf{position:fixed;right:24px;bottom:74px;z-index:65;width:min(420px,calc(100vw - 48px));
+         max-height:calc(100vh - 110px);display:none;flex-direction:column;
+         background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px 14px;
+         box-shadow:0 24px 60px -28px rgba(19,19,19,.45);}
+  #shelf.open{display:flex;}
+  #shelfHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  #shelfCount{font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-dim);letter-spacing:.04em;}
+  #shelfClose{background:none;border:none;font-family:'Inter',sans-serif;font-size:11px;
+              color:var(--ink-faint);cursor:pointer;padding:2px 0;border-bottom:1px solid transparent;}
+  #shelfClose:hover{color:var(--ink);border-bottom-color:var(--ink);}
+  #shelfGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;
+             overflow-y:auto;overscroll-behavior:contain;min-height:0;flex:1;
+             -webkit-overflow-scrolling:touch;}
+  .tile{position:relative;aspect-ratio:1;border:1px solid var(--line);border-radius:8px;
+        overflow:hidden;cursor:pointer;background:#faf9f7;}
+  .tile img,.tile video{width:100%;height:100%;object-fit:cover;display:block;}
+  .tile.here{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,74,64,.25);}
+  .tile .kill{position:absolute;top:3px;right:3px;width:19px;height:19px;border:none;border-radius:50%;
+              background:rgba(255,255,255,.9);color:var(--ink);font-size:12px;line-height:19px;
+              cursor:pointer;padding:0;opacity:.8;transition:opacity .15s;
+              box-shadow:0 1px 4px rgba(19,19,19,.25);}
+  .tile:hover .kill{opacity:1;}
+  .tile .kill:hover{background:var(--accent);color:#fff;}
+  .tile .kill.armed{background:var(--accent);color:#fff;opacity:1;font-weight:700;}
+  .tile .vid{position:absolute;left:4px;bottom:4px;background:rgba(19,19,19,.75);color:#fff;
+             font-family:'Inter',sans-serif;font-size:9px;padding:1px 5px;border-radius:4px;}
+  .tile.add{display:flex;align-items:center;justify-content:center;border-style:dashed;
+            font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-dim);text-align:center;padding:6px;}
+  .tile.add:hover{border-color:var(--ink-dim);color:var(--ink);}
+  @media (max-width:760px){ #shelf{right:12px;left:12px;width:auto;bottom:70px;} }
+  /* Names are ordinary text drawn over the scene. As pictures inside the 3D
+     view they kept being hidden by textures, depth and draw order; as text they
+     either exist or they do not, and they stay crisp at any screen density. */
+  #labels{position:fixed;inset:0;z-index:11;pointer-events:none;overflow:hidden;}
+  #labels .lab{position:absolute;left:0;top:0;white-space:nowrap;
+               font-family:'Inter',system-ui,sans-serif;color:var(--ink-dim);
+               font-size:40px;line-height:1;
+               transform-origin:0 0;will-change:transform;}
+  #fileInput{display:none;}
+  .brandmark-wrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+                  z-index:2;pointer-events:none;opacity:.9;}
+  .brandmark{width:64px;height:auto;display:block;}
+  @media (max-width:760px){ .brandmark{width:50px;} }
+  .hint{position:fixed;bottom:24px;left:26px;z-index:60;display:flex;gap:18px;align-items:center;
+        color:var(--ink-faint);font-size:10.5px;letter-spacing:.02em;line-height:1;}
+  .hint span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+  .hint svg{width:13px;height:13px;flex:none;opacity:.9;}
+  @media (max-width:760px){
+    .hint{gap:12px;bottom:20px;left:18px;}
+    .add-fab span{display:none;}
+    .add-fab{padding:12px;border-radius:50%;}
+    }
+</style>
+</head>
+<body>
+<header><img class="logo-img" alt="Wrong Art Gallery" src="data:image/png;base64,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"><div id="collection">scans</div></header>
+<div class="counter" id="counter"></div>
+
+<div id="labels"></div>
+<div id="dimLayer"></div>
+<img id="zoomImg" alt="">
+<video id="zoomVid" muted loop playsinline crossorigin="anonymous"></video>
+<div class="empty" id="emptyState">
+  <div class="brand-lg">Wrong ir skeneris</div>
+  <p>Ielādēju darbus…</p>
+</div>
+
+<div id="pubMsg"></div>
+<button class="add-fab" id="addBtn" type="button">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  <span>Visi darbi</span>
+</button>
+<div id="shelf">
+  <div id="shelfHead"><span id="shelfCount"></span><button id="shelfClose" type="button">aizvērt</button></div>
+  <div id="shelfGrid"></div>
+</div>
+<div class="hint">
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l6.5 16 2-6.5L20 10.5z"/></svg>tuvināt</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6L4 12l5 6M15 6l5 6-5 6M7.5 12h9"/></svg>iet pa telpu</span>
+</div>
+<div class="brandmark-wrap"><svg class="brandmark" width="254" height="90" viewBox="0 0 254 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M253.385 40.6666H0V50.3333H253.385V40.6666Z" fill="#FF4A40"/>
+<path d="M33.0257 88.792H23.0708L11.3059 0.90604H23.3725L28.5007 46.5101L28.8024 49.5302H29.7074L30.0091 46.5101L35.439 0.90604H44.7906L50.2206 46.5101L50.5222 49.5302H51.4272L51.7289 46.5101L56.8572 0.90604H68.9237L57.1588 88.792H47.2039L41.1706 47.1141L40.5673 41.9799H39.964L39.3607 47.1141L33.0257 88.792Z" fill="#131313"/>
+<path d="M98.4868 88.792L91.8502 51.6443H88.5319V88.792H75.5603V0.90604H88.5319C103.917 0.90604 110.553 9.66443 110.553 26.2752C110.553 35.0336 108.14 42.8859 103.313 46.2081L111.458 88.792H98.4868ZM88.2302 39.8658C90.0402 39.8658 92.4535 39.5638 94.2635 38.0537C96.0735 36.2416 97.5818 33.2215 97.5818 26.8792C97.5818 20.5369 96.0735 17.2148 94.2635 15.7047C92.4535 13.8926 90.0402 13.8926 88.2302 13.8926V39.8658Z" fill="#131313"/>
+<path d="M151.58 70.9732C151.58 74.5973 150.675 77.9195 149.468 80.6376C148.261 83.0537 146.753 85.1678 144.34 86.9799C141.926 88.792 138.608 90 134.385 90C130.161 90 126.843 88.792 124.43 86.9799C122.017 85.1678 120.508 83.0537 119.302 80.6376C118.095 77.9195 117.19 74.5973 117.19 70.9732V19.0268C117.19 15.7047 118.095 12.3826 119.302 9.66443C120.508 7.24832 122.017 4.83222 124.43 3.02013C126.843 1.20805 130.161 0 134.385 0C138.608 0 141.926 1.20805 144.34 3.02013C146.753 4.83222 148.261 7.24832 149.468 9.66443C150.675 12.3826 151.58 15.7047 151.58 19.0268V70.9732ZM138.306 19.0268C138.306 16.6107 138.005 15.1007 136.798 13.5906C136.195 12.9866 135.29 12.6846 134.083 12.6846C131.67 12.6846 130.765 14.4966 130.161 16.0067C129.86 16.9128 129.558 18.1208 129.558 19.3289V71.2752C129.558 73.6913 130.161 75.5034 131.368 76.7114C131.971 77.3154 132.876 77.6175 133.781 77.6175C136.195 77.6175 137.1 76.1074 137.703 74.2953C138.005 73.3893 138.306 72.4832 138.306 70.9732V19.0268Z" fill="#131313"/>
+<path d="M174.204 43.1879L173.299 40.1678H172.394V89.094H160.63V0.90604H172.093L184.763 46.8121L185.969 50.7383H186.573V0.90604H198.338V88.792H186.874L174.204 43.1879Z" fill="#131313"/>
+<path d="M229.107 32.6175V19.0268C229.107 16.6107 228.504 15.1007 227.297 13.5906C226.694 12.9866 225.789 12.6846 224.582 12.6846C222.169 12.6846 221.264 14.4966 220.661 16.0067C220.359 16.9128 220.057 18.1208 220.057 19.3289V72.1812C220.057 74.5973 220.661 76.4094 221.867 77.6175C222.471 78.2215 223.376 78.5235 224.281 78.5235C226.694 78.5235 227.599 77.0134 228.202 75.2013C228.504 74.2953 228.806 73.3893 228.806 71.8792V55.8725H224.582V45H241.777V88.792H234.236L232.727 84.5638C230.314 87.5839 226.996 89.698 222.772 89.698C218.549 89.698 215.834 88.4899 213.722 86.6779C211.611 84.8658 210.102 82.7517 209.197 80.3356C207.991 77.6175 207.689 74.2953 207.689 70.6711V19.0268C207.689 15.7047 208.594 12.3826 209.801 9.66443C211.007 7.24832 212.516 4.83222 214.929 3.02013C217.342 1.20805 220.661 0 224.884 0C229.107 0 232.426 1.20805 234.839 3.02013C237.252 4.83222 238.76 7.24832 239.967 9.66443C241.174 12.3826 242.079 15.7047 242.079 19.0268V32.6175H229.107Z" fill="#131313"/>
+</svg></div>
+<div id="errBox" style="display:none;position:fixed;left:0;right:0;top:0;z-index:999;background:#fff3f0;color:#FF4A40;font:12px/1.5 monospace;padding:12px 16px;border-bottom:1px solid #f0c9c0;white-space:pre-wrap;"></div>
+<script>window.addEventListener('error',function(e){var b=document.getElementById('errBox');if(b){b.style.display='block';b.textContent+=(e.message||e.error)+' @ '+(e.lineno||'?')+':'+(e.colno||'?')+'\n';}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+try{
+
+
+// ---------------------------------------------------------------------------
+// The room is a rectangle seen from the inside. The camera sits in the middle
+// looking towards the far wall. One work hangs on the far wall facing you,
+// three hang on each side wall facing inwards, and one hangs behind you.
+// Scrolling walks the works around that rectangle, so it never ends.
+// ---------------------------------------------------------------------------
+const H=1.06;              // every work is one unit tall
+const FAR=4.25;          // distance to the far wall
+const SIDE=1.42;        // half-width of the room
+const BEHIND=0.70;      // the wall behind the camera
+const SLOTS_N=10;       // more places around the room = works sit closer together
+const SEG_W=28, SEG_H=2;
+
+let items=[], cur=0, vel=0, velT=0, inbox=0, snapTo=null, focusIdx=null, groups=[];
+let lastFrame=performance.now(), frameDT=1;
+function frameStep(){ return frameDT; }
+let scene,camera,renderer,raycaster,pointer,ctxLost=false;
+let zoomIdx=null, zoomT=0, zoomE=0, zoomOn=null;
+
+const $=id=>document.getElementById(id);
+
+const counter=$('counter'), emptyState=$('emptyState');
+
+
+// the same picture added twice is still one work
+function dedupe(list){
+  const seen=new Set(), out=[];
+  (list||[]).forEach(it=>{
+    const key=it&&it.src; if(!key||seen.has(key)) return;
+    seen.add(key); out.push(it);
+  });
+  return out;
+}
+// a different walk through the room on every visit
+function shuffle(list){
+  const out=list.slice();
+  for(let i=out.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    const t=out[i]; out[i]=out[j]; out[j]=t;
+  }
+  return out;
+}
+
+let dirty=false;
+
+
+
+const isVideo=it=>it && (it.kind==='video' || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(it.src||''));
+
+function videoElementFor(src){
+  const v=document.createElement('video');
+  // the file comes from the blob store, so the element has to be marked as
+  // cross-origin before it can be used as a surface in the 3D scene
+  v.crossOrigin='anonymous';
+  v.src=src; v.muted=true; v.loop=true; v.playsInline=true; v.autoplay=true; v.preload='auto';
+  v.setAttribute('muted',''); v.setAttribute('playsinline','');
+  v.setAttribute('crossorigin','anonymous');
+  v.play().catch(()=>{});
+  return v;
+}
+
+// ---- scene ----------------------------------------------------------------
+function initScene(){
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(40,1,0.05,60);
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});
+  renderer.setPixelRatio(Math.min((devicePixelRatio||1)*1.75, 3));  // supersample: fights moire
+  renderer.outputEncoding=THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  // a lost graphics context used to freeze the gallery; recover from it instead
+  const cv=renderer.domElement;
+  cv.addEventListener('webglcontextlost',e=>{ e.preventDefault(); ctxLost=true; }, false);
+  cv.addEventListener('webglcontextrestored',()=>{ ctxLost=false; try{ buildGroups(); }catch(e){} }, false);
+  raycaster=new THREE.Raycaster(); pointer=new THREE.Vector2();
+  solveSlots();
+  resize();
+}
+// On a narrow screen a 40-degree lens sees almost nothing sideways, so the room
+// looks like a wall with one picture. Widen the view and make the works smaller
+// so the side walls come into frame and it reads as a room again.
+let WORK_SCALE=1;
+function fitToScreen(){
+  const a=innerWidth/innerHeight;
+  camera.fov = a<1.35 ? Math.min(66, 40+(1.35-a)*34) : 40;
+  WORK_SCALE = a<1.35 ? Math.max(0.52, 0.52+(a-0.45)*0.53) : 1;
+}
+
+function resize(){
+  const w=innerWidth,h=innerHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; fitToScreen(); camera.updateProjectionMatrix();
+  solveSlots();
+  groups.forEach(g=>{ if(g.userData.tex) rebuildMesh(g); });
+}
+
+// One straight wall each side, a wall facing you and a wall behind you.
+// The works hang along this single path, so each one lies flat on its wall
+// and creases only where the path turns a corner.
+const DEPTH=FAR+BEHIND;
+const PERIM=4*SIDE+2*DEPTH;
+const SLOT=PERIM/SLOTS_N;
+
+// same walk, but writing into a holder that gets reused. Called for every point
+// of every work on every frame, so allocating here is what creates the churn.
+const _w1={x:0,z:0}, _w2={x:0,z:0}, _w3={x:0,z:0}, _w4={x:0,z:0};
+function walkInto(s,out){
+  let t=s % PERIM; if(t<0) t+=PERIM;
+  if(t<=SIDE){ out.x=t; out.z=-FAR; return out; }
+  t-=SIDE;
+  if(t<=DEPTH){ out.x=SIDE; out.z=-FAR+t; return out; }
+  t-=DEPTH;
+  if(t<=2*SIDE){ out.x=SIDE-t; out.z=BEHIND; return out; }
+  t-=2*SIDE;
+  if(t<=DEPTH){ out.x=-SIDE; out.z=BEHIND-t; return out; }
+  t-=DEPTH;
+  out.x=-SIDE+t; out.z=-FAR; return out;
+}
+
+function walk(s){
+  let t=s % PERIM; if(t<0) t+=PERIM;
+  if(t<=SIDE)   return {x:t,      z:-FAR};        // far wall, right half
+  t-=SIDE;
+  if(t<=DEPTH)  return {x:SIDE,   z:-FAR+t};      // right wall
+  t-=DEPTH;
+  if(t<=2*SIDE) return {x:SIDE-t, z:BEHIND};      // the wall behind you
+  t-=2*SIDE;
+  if(t<=DEPTH)  return {x:-SIDE,  z:BEHIND-t};    // left wall
+  t-=DEPTH;
+  return {x:-SIDE+t, z:-FAR};                     // far wall, left half
+}
+// Equal arc steps along the walls do not look equal on screen: the far wall is
+// flat and the side walls run away from you. So the resting places are solved
+// for instead — spaced so the gaps you actually see come out the same.
+let SLOT_R=[0,1.48,3.34,4.55,5.9,7.2], SLOT_L=SLOT_R.slice();
+
+// How wide the work sitting at a given place actually is. A landscape scan
+// takes up far more room than a portrait one, so the gaps can only come out
+// even if each work is measured rather than assumed.
+function widthAt(off){
+  const n=items.length; if(!n) return H*0.92;
+  let idx=-1;
+  for(let i=0;i<n;i++){ if(Math.round(relOffset(i))===off){ idx=i; break; } }
+  const g=idx>=0?groups[idx]:null;
+  const ar=(g&&g.userData.aspect)||1;
+  return H*WORK_SCALE*ar;
+}
+
+function solveSide(sign){
+  const fov=camera.fov*Math.PI/180, f=1/Math.tan(fov/2), aspect=innerWidth/innerHeight;
+  const gap=innerWidth*0.075;
+  const sx=p=>((p.x*f/aspect)/(-p.z)*0.5+0.5)*innerWidth;
+  // sample across the whole width: a work creased at a corner sticks out further
+  // than a straight line between its two edges would suggest
+  const edges=(a,w)=>{
+    let lo=Infinity, hi=-Infinity;
+    for(let i=0;i<=8;i++){
+      const q=walk(sign*a-w/2+w*i/8);
+      if(q.z>=-0.05) return null;
+      const v=sx(q); if(v<lo) lo=v; if(v>hi) hi=v;
+    }
+    return [lo,hi];
+  };
+  const first=edges(0,widthAt(0)); if(!first) return null;
+  const arcs=[0]; let prev=sign>0?first[1]:first[0];
+  const clears=(e)=> sign>0 ? e[0]>=prev+gap : e[1]<=prev-gap;
+  for(let k=1;k<=5;k++){
+    const w=widthAt(sign*k);
+    let lo=arcs[k-1]+0.05, hi=null;
+    for(let a=lo; a<PERIM/2; a+=0.08){          // coarse sweep
+      const e=edges(a,w); if(!e) break;
+      if(clears(e)){ hi=a; break; }
+      lo=a;
+    }
+    if(hi===null){ break; }
+    for(let i=0;i<10;i++){                      // then halve the gap ten times
+      const mid=(lo+hi)/2, e=edges(mid,w);
+      if(e&&clears(e)) hi=mid; else lo=mid;
+    }
+    const e=edges(hi,w); if(!e) break;
+    prev=sign>0?e[1]:e[0];
+    arcs.push(hi);
+  }
+  // Always hand back the same number of places. A shorter list changes the rule
+  // used for the works further out, and they jump sideways when it happens.
+  while(arcs.length<6){
+    const step=arcs.length>1?arcs[arcs.length-1]-arcs[arcs.length-2]:1.5;
+    arcs.push(arcs[arcs.length-1]+step);
+  }
+  return arcs;
+}
+let resolveTimer=null;
+function resolveSoon(){ clearTimeout(resolveTimer); resolveTimer=setTimeout(solveSlots,120); }
+
+let SLOT_R_T=null, SLOT_L_T=null;
+function solveSlots(){
+  const step=PERIM/10;
+  const plain=[0,step,step*2,step*3,step*4,step*5];
+  SLOT_R_T=solveSide(1)||plain;
+  SLOT_L_T=solveSide(-1)||plain;
+}
+
+// Ease the places towards their new values. Applied all at once, even a small
+// change shows up as every work twitching sideways together.
+function easeSlots(){
+  const pairs=[[SLOT_R,SLOT_R_T],[SLOT_L,SLOT_L_T]];
+  for(let p=0;p<2;p++){
+    const cur=pairs[p][0], want=pairs[p][1];
+    if(!want) continue;
+    if(cur.length!==want.length){ cur.length=0; for(let i=0;i<want.length;i++) cur.push(want[i]); continue; }
+    const k=1-Math.pow(1-0.09,frameStep());
+    for(let i=0;i<cur.length;i++) cur[i]+=(want[i]-cur[i])*k;
+  }
+}
+
+function arcFor(o){
+  const s=Math.sign(o)||1, a=Math.abs(o);
+  const T=s>0?SLOT_R:SLOT_L, last=T.length-1;
+  const step=T[last]-T[last-1];
+  // the resting places are unevenly spaced, so joining them with straight lines
+  // made the works change speed the moment they passed one. A smooth curve
+  // through the same places keeps the speed continuous.
+  const at=k=>k<0 ? -at(-k) : (k<=last ? T[k] : T[last]+(k-last)*step);
+  const k=Math.floor(a), t=a-k;
+  const p0=at(k-1), p1=at(k), p2=at(k+1), p3=at(k+2);
+  const v=0.5*((2*p1) + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t*t + (-p0+3*p1-3*p2+p3)*t*t*t);
+  return s*v;
+}
+
+// a flat sheet whose vertices we move onto the wall path every frame
+function sheetGeometry(w,h){
+  const g=new THREE.PlaneGeometry(w,h,SEG_W,SEG_H);
+  g.userData.w=w;
+  // the sheet is moved around the room every frame, so give it a bounding
+  // sphere big enough to always hold it and never recompute one mid-flight
+  g.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,0,-FAR/2), PERIM);
+  return g;
+}
+
+// "4scan-20260730-153054-300dpi.jpg" reads better as "4scan 20260730 153054 300dpi"
+function tidyName(raw){
+  return String(raw||'')
+    .replace(/\.[A-Za-z0-9]+$/,'')            // drop the extension
+    .replace(/-[A-Za-z0-9]{16,}$/,'')          // drop the store's random suffix
+    .replace(/[_-]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+// "4scan-20260730-153054-300dpi.jpg" reads better as "4scan 20260730 153054 300dpi"
+function tidyName2(raw){
+  return String(raw||'')
+    .replace(/\.[A-Za-z0-9]+$/,'')
+    .replace(/-[A-Za-z0-9]{16,}$/,'')
+    .replace(/[_-]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+const labelBox=$('labels'), LAB_BASE=40;
+function makeLabel(g,item){
+  const text=tidyName2(item&&(item.title||item.name))||'bez nosaukuma';
+  const el=document.createElement('div');
+  el.className='lab';
+  el.textContent=text;
+  labelBox.appendChild(el);
+  g.userData.lab=el;
+}
+
+function rebuildMesh(g){
+  const ar=g.userData.aspect||1, h=H*WORK_SCALE, w=h*ar;
+  if(g.userData.art){ g.remove(g.userData.art); g.userData.art.geometry.dispose(); }
+  const art=new THREE.Mesh(sheetGeometry(w,h),
+    new THREE.MeshBasicMaterial({map:g.userData.tex,side:THREE.DoubleSide}));
+  g.add(art); g.userData.art=art;
+
+  g.userData.w=w;
+
+}
+
+function buildGroups(){
+  if(labelBox) labelBox.innerHTML='';
+  groups.forEach(g=>scene.remove(g)); groups=[];
+  const loader=new THREE.TextureLoader();
+  items.forEach(item=>{
+    const g=new THREE.Group();
+    g.userData={item, aspect:1, tex:null};
+    scene.add(g); groups.push(g);
+    makeLabel(g, item);
+    if(isVideo(item)){
+      const v=videoElementFor(item.src);
+      const finish=()=>{
+        try{
+          const tex=new THREE.VideoTexture(v);
+          tex.minFilter=THREE.LinearFilter; tex.magFilter=THREE.LinearFilter;
+          tex.generateMipmaps=false;
+          tex.encoding=THREE.sRGBEncoding;
+          g.userData.tex=tex; g.userData.video=v;
+          g.userData.aspect=(v.videoWidth||16)/(v.videoHeight||9);
+          rebuildMesh(g);
+          resolveSoon();
+        }catch(e){}
+      };
+      if(v.readyState>=1) finish(); else v.onloadedmetadata=finish;
+      return;
+    }
+    loader.load(item.src, tex=>{
+      try{
+        tex.encoding=THREE.sRGBEncoding;
+        tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+        tex.generateMipmaps=true;
+        tex.minFilter=THREE.LinearMipmapLinearFilter;   // smooth when squashed
+        tex.magFilter=THREE.LinearFilter;
+        tex.wrapS=tex.wrapT=THREE.ClampToEdgeWrapping;
+        tex.needsUpdate=true;
+        g.userData.tex=tex;
+        g.userData.aspect=(tex.image.width||1)/(tex.image.height||1);
+        rebuildMesh(g);
+        resolveSoon();
+      }catch(e){}
+    }, undefined, ()=>{});
+  });
+  updateUI();
+}
+
+// ---- hanging the works on the walls ---------------------------------------
+function relOffset(i){
+  const n=items.length; if(!n) return 0;
+  let o=(i-cur)%n; if(o>n/2) o-=n; if(o<-n/2) o+=n;
+  return o;
+}
+
+function place(){
+  const n=items.length; if(!n) return;
+  groups.forEach((g,i)=>{
+    const art=g.userData.art; if(!art) return;
+    const geo=art.geometry, pos=geo.attributes.position;
+    const w=geo.userData.w||1;
+    const s0=arcFor(relOffset(i));
+
+    // the work you are walking towards flattens out, so a crease at a corner
+    // unfolds instead of staying bent while you look straight at it
+    const flat=(zoomOn===i)?zoomE:0;
+    let tx=0,tz=0,cx=0,cz2=0;
+    if(flat>0){
+      const c=walkInto(s0,_w2), l=walkInto(s0-0.01,_w3), r=walkInto(s0+0.01,_w4);
+      tx=r.x-l.x; tz=r.z-l.z;
+      const m=Math.hypot(tx,tz)||1; tx/=m; tz/=m;
+      cx=c.x; cz2=c.z;
+    }
+
+    for(let k=0;k<pos.count;k++){
+      const lx=geo.attributes.uv.getX(k)*w-w/2;   // where this column sits across the sheet
+      const ly=pos.getY(k);
+      const p=walkInto(s0+lx,_w1);                // ...and where that lands on the walls
+      let px=p.x, pz=p.z;
+      if(flat>0){
+        px += ((cx+tx*lx)-px)*flat;
+        pz += ((cz2+tz*lx)-pz)*flat;
+      }
+      pos.setXYZ(k, px, ly, pz);
+    }
+    pos.needsUpdate=true;
+
+    const mid=walkInto(s0,_w2);
+    const off=Math.abs(relOffset(i));
+    // Anything past about 2.5 places is already off the side of the screen, and
+    // that is also where the spacing figures stop being solved and start being
+    // guessed. Drawing them only made those guesses visible as jumps.
+    const behind=(mid.z>-0.45) || off>2.75;
+    g.visible=!behind;
+
+    const lab=g.userData.lab;
+    if(lab){
+      if(behind){ lab.style.display='none'; }
+      else {
+        // two points along the wall under the work: where the name starts, and
+        // how long a known distance looks from here. That gives its place, its
+        // angle and its size in one go.
+        // Three points of the wall under the work: where the name starts, a step
+        // along the wall, and a step up it. Projected, those three give the
+        // name the same lean and foreshortening the work itself has — turning
+        // it by an angle alone left it standing upright on a slanted wall.
+        const yy=-H*WORK_SCALE/2-0.052*WORK_SCALE;
+        const STEP=0.5, LAB_EM=0.055*WORK_SCALE;
+        const o1=walkInto(s0-w/2, _w3);
+        const o2=walkInto(s0-w/2+STEP, _w4);
+        _v.set(o1.x,yy,o1.z).project(camera);
+        const px0=(_v.x*0.5+0.5)*innerWidth, py0=(-_v.y*0.5+0.5)*innerHeight, pz0=_v.z;
+        _v.set(o2.x,yy,o2.z).project(camera);
+        const pxX=(_v.x*0.5+0.5)*innerWidth, pyX=(-_v.y*0.5+0.5)*innerHeight;
+        _v.set(o1.x,yy+STEP,o1.z).project(camera);
+        const pxY=(_v.x*0.5+0.5)*innerWidth, pyY=(-_v.y*0.5+0.5)*innerHeight;
+        const k=LAB_EM/(LAB_BASE*STEP);
+        const a1=(pxX-px0)*k, b1=(pyX-py0)*k;      // one text pixel across
+        const c1=-(pxY-px0)*k, d1=-(pyY-py0)*k;    // and one down the page
+        if(pz0>1 || !isFinite(a1) || !isFinite(d1) || Math.hypot(a1,b1)<0.001){
+          lab.style.display='none';
+        } else {
+          lab.style.display='block';
+          lab.style.transform='matrix('+a1.toFixed(4)+','+b1.toFixed(4)+','+c1.toFixed(4)+','+d1.toFixed(4)+','+px0.toFixed(1)+','+py0.toFixed(1)+')';
+        }
+      }
+    }
+
+  });
+}
+
+// ---- walking up to a work --------------------------------------------------
+const dimLayer=$('dimLayer'), zoomImg=$('zoomImg'), zoomVid=$('zoomVid');
+const headerEl=document.querySelector('header'), markEl=document.querySelector('.brandmark-wrap');
+const _v=new THREE.Vector3();
+const lookAt=new THREE.Vector3();
+
+// where the work lands on screen right now
+function screenRect(i){
+  const g=groups[i]; if(!g||!g.userData.art) return null;
+  const pos=g.userData.art.geometry.attributes.position;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(let k=0;k<pos.count;k++){
+    _v.set(pos.getX(k),pos.getY(k),pos.getZ(k)).project(camera);
+    const sx=(_v.x*0.5+0.5)*innerWidth, sy=(-_v.y*0.5+0.5)*innerHeight;
+    if(sx<x0)x0=sx; if(sx>x1)x1=sx; if(sy<y0)y0=sy; if(sy>y1)y1=sy;
+  }
+  if(!isFinite(x0)||!isFinite(y0)) return null;
+  return {left:x0, top:y0, width:Math.max(2,x1-x0), height:Math.max(2,y1-y0)};
+}
+
+// where to stand so the work fills most of the view, and what to look at
+function viewpointFor(i){
+  const g=groups[i];
+  const w=(g&&g.userData.art)?(g.userData.art.geometry.userData.w||1):1;
+  const s0=arcFor(relOffset(i));
+  const c=walkInto(s0,_w2), l=walkInto(s0-0.01,_w3), r=walkInto(s0+0.01,_w4);
+  // the wall's inward normal at that spot
+  let nx=-(r.z-l.z), nz=(r.x-l.x);
+  const m=Math.hypot(nx,nz)||1; nx/=m; nz/=m;
+  if(c.x*nx+c.z*nz>0){ nx=-nx; nz=-nz; }      // always point back into the room
+  const vfov=camera.fov*Math.PI/180;
+  const needH=(H/2)/Math.tan(vfov/2)/0.72;
+  const needW=(w/2)/Math.tan(vfov/2)/(camera.aspect*0.66);
+  const dist=Math.max(needH,needW);
+  return {pos:{x:c.x+nx*dist, z:c.z+nz*dist}, look:{x:c.x, z:c.z}};
+}
+
+function zoomTo(i){ lastZoomIdx=i; zoomIdx=i; focusIdx=i; document.body.classList.add('zoomed'); updateUI(); }
+function unzoom(){
+  if(zoomIdx===null&&focusIdx===null) return;
+  zoomIdx=null; focusIdx=null;
+  document.body.classList.remove('zoomed');
+  updateUI();
+}
+dimLayer.addEventListener('click',unzoom);
+
+// move the camera a step towards (or back from) the work, every frame
+function driveCamera(){
+  const want=zoomIdx===null?0:1;
+  zoomOn = zoomIdx!==null?zoomIdx:lastZoomIdx;
+  zoomT += (want-zoomT)*(1-Math.pow(1-0.085,frameStep()));
+  if(Math.abs(want-zoomT)<0.001) zoomT=want;
+
+  if(zoomT<0.0015){
+    zoomE=0;
+    camera.position.set(0,0,0);
+    camera.lookAt(0,0,-FAR);
+    zoomImg.style.display='none'; zoomImg.style.opacity='0';
+    zoomVid.style.display='none'; zoomVid.style.opacity='0';
+    if(zoomVid.getAttribute('src')){ zoomVid.pause(); zoomVid.removeAttribute('src'); zoomVid.load(); }
+    renderer.domElement.style.filter='none';
+    dimLayer.style.opacity='0';
+    if(headerEl){ headerEl.style.filter='none'; headerEl.style.opacity=''; }
+    if(markEl){ markEl.style.filter='none'; markEl.style.opacity=''; }
+    if(labelBox){ labelBox.style.filter='none'; labelBox.style.opacity=''; }
+    return;
+  }
+  const i=zoomIdx!==null?zoomIdx:lastZoomIdx;
+  if(i===null||!groups[i]) return;
+  const v=viewpointFor(i);
+  const e=zoomT*zoomT*(3-2*zoomT);                     // ease in and out
+  zoomE=e;
+  camera.position.set(v.pos.x*e, 0, v.pos.z*e);
+  lookAt.set(v.look.x*e, 0, -FAR+(v.look.z+FAR)*e);
+  camera.lookAt(lookAt);
+
+  // the room only starts to soften once you are nearly there
+  const soft=Math.max(0,(e-0.45)/0.55);
+  renderer.domElement.style.filter='blur('+(11*soft).toFixed(2)+'px)';
+  dimLayer.style.opacity=(0.10*e).toFixed(3);   // 10% over everything behind the work
+
+  // and the work itself is laid over it, sharp, exactly where it appears
+  // the title and the mark soften along with the room
+  // walking up to a work, the titles fade away rather than hang around blurred
+  const soften='blur('+(7*soft).toFixed(2)+'px)';
+  const fade=Math.max(0,1-e*1.6).toFixed(3);
+  if(headerEl){ headerEl.style.filter=soften; headerEl.style.opacity=fade; }
+  if(markEl){ markEl.style.filter=soften; markEl.style.opacity=fade; }
+  // the other works' names go with the room, so nothing competes with the one
+  // you are standing in front of
+  if(labelBox){ labelBox.style.filter=soften; labelBox.style.opacity=fade; }
+
+  const r=screenRect(i);
+  if(r){
+    const video=isVideo(items[i]);
+    const el=video?zoomVid:zoomImg, other=video?zoomImg:zoomVid;
+    other.style.display='none'; other.style.opacity='0';
+    if(el.getAttribute('src')!==items[i].src){
+      el.src=items[i].src;
+      if(video){ const src=groups[i]&&groups[i].userData.video;
+        if(src) el.currentTime=src.currentTime||0;
+        el.play().catch(()=>{}); }
+    }
+    el.style.display='block';
+    el.style.left=r.left+'px';  el.style.top=r.top+'px';
+    el.style.width=r.width+'px'; el.style.height=r.height+'px';
+    const op=Math.max(0,Math.min(1,(e-0.5)/0.32));
+    el.style.opacity=op.toFixed(3);
+    // once the sharp copy covers it, drop the blurred original underneath —
+    // otherwise its soft edge shows around the picture like a shadow
+    if(groups[i]) groups[i].visible = op<0.9;
+  }
+}
+let lastZoomIdx=null;
+
+// which work is in front of you right now
+function activeIndex(){
+  const n=items.length; if(!n) return -1;
+  return focusIdx!==null?focusIdx:((Math.round(cur)%n)+n)%n;
+}
+
+
+// ---- saving the gallery into the page itself -------------------------------
+// ---- navigation ------------------------------------------------------------
+function go(d){ if(focusIdx!==null) unzoom(); snapTo=Math.round(snapTo===null?cur:snapTo)+d; vel=0; velT=0; inbox=0; }
+
+// walk round to a particular work by the shortest way
+function goToIndex(i){
+  const n=items.length; if(!n) return;
+  if(focusIdx!==null) unzoom();
+  let o=((i-Math.round(cur))%n+n)%n;
+  if(o>n/2) o-=n;
+  snapTo=Math.round(cur)+o; vel=0; velT=0; inbox=0;
+}
+function focusOn(i){
+  if(focusIdx===i){ unzoom(); return; }
+  if(focusIdx!==null) unzoom();
+  zoomTo(i);
+}
+addEventListener('keydown',e=>{
+  if(document.activeElement&&document.activeElement.isContentEditable) return;
+  if(e.key==='Escape') unzoom();
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault(); go(-1);}
+  if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault(); go(1);}
+});
+addEventListener('wheel',e=>{
+  if(e.cancelable) e.preventDefault();
+  if(shelf.contains(e.target)) return;          // let the list scroll on its own
+  if(!items.length) return;
+  const d=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY;
+  if(!d) return;
+  if(focusIdx!==null) unzoom();
+  // A mouse sends a few big clicks, a trackpad a stream of small ones. Treating
+  // each as a push into a moving weight makes both feel the same: it keeps
+  // gliding between clicks instead of stopping and starting.
+  // No momentum and no settling: the works move exactly as far as the fingers
+  // do, and stop when they stop.
+  cur += Math.sign(d)*Math.min(1,Math.abs(d)/110)*0.16;
+  vel=0; velT=0; inbox=0; snapTo=null;
+},{passive:false});
+
+let down=null, moved=false;
+function pDown(x,y,t){ if(t&&t.isContentEditable) return; down={x,y}; moved=false; document.body.classList.add('dragging'); }
+function pMove(x){
+  if(!down) return;
+  const dx=x-down.x;
+  if(Math.abs(dx)>4) moved=true;
+  if(moved){
+    if(focusIdx!==null) unzoom();
+    const step=(down.x-x)/(innerWidth*0.42);
+    cur+=step; vel=step; velT=0; inbox=0; snapTo=null;   // follow the hand
+    down.x=x;
+  }
+}
+function pUp(x,y){ document.body.classList.remove('dragging'); if(down&&!moved) pick(x,y); else if(moved) snapTo=null; down=null; }
+addEventListener('mousedown',e=>{ if(e.target.closest('button')) return; pDown(e.clientX,e.clientY,e.target); });
+addEventListener('mousemove',e=>pMove(e.clientX));
+addEventListener('mouseup',e=>pUp(e.clientX,e.clientY));
+addEventListener('touchstart',e=>{ if(e.target.closest('button')) return; pDown(e.touches[0].clientX,e.touches[0].clientY,e.target); },{passive:true});
+addEventListener('touchmove',e=>pMove(e.touches[0].clientX),{passive:true});
+addEventListener('touchend',e=>{ const t=e.changedTouches[0]; pUp(t.clientX,t.clientY); },{passive:true});
+
+function pick(x,y){
+  if(shelf.classList.contains('open')){ closeShelf(); return; }
+  if(!items.length) return;
+  pointer.set((x/innerWidth)*2-1, -(y/innerHeight)*2+1);
+  raycaster.setFromCamera(pointer,camera);
+  const meshes=groups.filter(g=>g.visible&&g.userData.art).map(g=>g.userData.art);
+  const hit=raycaster.intersectObjects(meshes,false)[0];
+  if(hit) focusOn(groups.indexOf(hit.object.parent));
+  else unzoom();
+}
+
+
+function say(){}   // no status line on the hosted version
+
+// ---- the shelf: everything that has been added -----------------------------
+const shelf=$('shelf'), shelfGrid=$('shelfGrid'), shelfCount=$('shelfCount');
+
+function drawShelf(){
+  shelfGrid.innerHTML='';
+  const here=activeIndex();
+  items.forEach((it,i)=>{
+    const t=document.createElement('div');
+    t.className='tile'+(i===here?' here':'');
+    t.title='Iet pie šī darba';
+    if(isVideo(it)){
+      const v=document.createElement('video');
+      v.src=it.src; v.muted=true; v.playsInline=true; v.preload='metadata';
+      t.appendChild(v);
+      const tag=document.createElement('span'); tag.className='vid'; tag.textContent='video';
+      t.appendChild(tag);
+    } else {
+      const im=document.createElement('img'); im.src=it.src; im.alt=''; t.appendChild(im);
+    }
+    t.addEventListener('click',()=>{ goToIndex(i); closeShelf(); });
+    shelfGrid.appendChild(t);
+  });
+  shelfCount.textContent=items.length? items.length+(items.length===1?' darbs':' darbi') : 'vēl nekā nav';
+}
+function openShelf(){ drawShelf(); shelf.classList.add('open'); }
+function closeShelf(){ shelf.classList.remove('open'); }
+function toggleShelf(){ shelf.classList.contains('open')?closeShelf():openShelf(); }
+$('shelfClose').addEventListener('click',closeShelf);
+shelf.addEventListener('mousedown',e=>e.stopPropagation());
+shelf.addEventListener('click',e=>e.stopPropagation());
+
+// ---- adding images ---------------------------------------------------------
+$('addBtn').onclick=toggleShelf;
+addEventListener('keydown',e=>{ if(e.key==='Escape') closeShelf(); });
+addEventListener('resize',resize);
+
+function updateUI(){
+  const n=items.length;
+  emptyState.style.display=n?'none':'flex';
+  counter.textContent=n?(activeIndex()+1)+' / '+n:'';
+}
+
+let lastKey=null;
+function tick(){
+  requestAnimationFrame(tick);
+  try{
+    // All of these used to be "per frame", which meant a 120 Hz screen ran the
+    // whole motion twice as fast as a 60 Hz one — the glide died before it got
+    // going. They are measured against real time now, so it feels the same
+    // whatever the screen does.
+    const now=performance.now();
+    const dt=Math.min(3, (now-lastFrame)/16.667) || 1;
+    lastFrame=now; frameDT=dt;
+    // Only a key press or a tap on a thumbnail animates: those set a target and
+    // spring to it. Wheel and drag move the position straight away.
+    if(snapTo!==null){
+      const K=0.055, DAMP=2*Math.sqrt(0.055);
+      vel += ((snapTo-cur)*K - vel*DAMP)*dt;
+      cur += vel*dt;
+      if(Math.abs(snapTo-cur)<0.0005 && Math.abs(vel)<0.0008){ cur=snapTo; vel=0; snapTo=null; }
+    } else {
+      vel=0; velT=0; inbox=0;
+    }
+
+    easeSlots(); place(); driveCamera();
+
+    const k=Math.round(cur)+'|'+focusIdx;
+    if(k!==lastKey){ lastKey=k; resolveSoon(); updateUI(); }
+    if(!ctxLost){
+      renderer.render(scene,camera);
+    }
+  }catch(e){
+    if(!window.__shown){ window.__shown=1;
+      const b=document.getElementById('errBox');
+      if(b){ b.style.display='block'; b.textContent='Kadra kļūda: '+(e&&e.message||e)+'\n'+(e&&e.stack||'').split('\n').slice(0,4).join('\n'); }
+    }
+  }
+}
+
+if(typeof THREE==='undefined') throw new Error('Three.js neielādējās');
+initScene(); tick();
+
+
+
+// the list of works lives in the store behind /api/works, so it can change
+// without touching the code or waiting for a deploy
+fetch('/api/works?t='+Date.now(), {cache:'no-store'})
+  .then(r=>r.ok?r.json():Promise.reject(new Error('sarakstu neizdevās ielādēt')))
+  .then(list=>{
+    items=shuffle(dedupe((list||[]).map((w,i)=>({
+      id:'w'+i,
+      src:typeof w==='string'?w:(w.url||w.src),
+      kind:(typeof w==='object'&&w.kind)||'',
+      name:tidyName((typeof w==='object'&&(w.title||w.name))||'')
+    }))));
+    cur=0; vel=0; velT=0; snapTo=0;
+    buildGroups(); updateUI();
+    if(!items.length){
+      const p=document.querySelector('.empty p');
+      if(p) p.innerHTML='Vēl nav neviena darba. Pievieno tos <a href="/admin.html" style="color:inherit">šeit</a>.';
+    }
+  })
+  .catch(err=>{
+    const b=document.getElementById('errBox');
+    if(b){ b.style.display='block'; b.textContent='Neizdevās ielādēt darbu sarakstu: '+(err&&err.message||err); }
+  });
+}catch(err){
+  const b=document.getElementById('errBox');
+  if(b){ b.style.display='block'; b.textContent='Galerija neieslēdzās: '+(err&&err.message||err); }
+}
+})();
+
+</script>
+</body>
+</html>
