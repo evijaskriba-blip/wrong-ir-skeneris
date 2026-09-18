@@ -152,7 +152,7 @@ try{
 // ---------------------------------------------------------------------------
 const H=1.06;              // every work is one unit tall
 const FAR=4.25;          // distance to the far wall
-const SIDE=1.42;        // half-width of the room
+let SIDE=1.42;        // half-width of the room
 const BEHIND=0.70;      // the wall behind the camera
 const SLOTS_N=10;       // more places around the room = works sit closer together
 const SEG_W=28, SEG_H=2;
@@ -228,7 +228,7 @@ let WORK_SCALE=1;
 function fitToScreen(){
   const a=innerWidth/innerHeight;
   camera.fov = 40;
-  WORK_SCALE = Math.min(1, 0.92*a + 0.36);
+  WORK_SCALE = Math.min(1, 0.92*a + 0.36); SIDE = Math.max(0.55, Math.min(1.42, 0.8*Math.tan(camera.fov*Math.PI/360)*a*FAR)); PERIM = 4*SIDE+2*DEPTH; resolveSoon();
 }
 
 function resize(){
@@ -243,7 +243,7 @@ function resize(){
 // The works hang along this single path, so each one lies flat on its wall
 // and creases only where the path turns a corner.
 const DEPTH=FAR+BEHIND;
-const PERIM=4*SIDE+2*DEPTH;
+let PERIM=4*SIDE+2*DEPTH;
 const SLOT=PERIM/SLOTS_N;
 
 // same walk, but writing into a holder that gets reused. Called for every point
