@@ -27,6 +27,15 @@
   .drop{border:1.5px dashed var(--line);border-radius:12px;padding:26px;text-align:center;color:var(--dim);
         font-size:13px;margin-bottom:22px;transition:border-color .15s,background .15s;}
   .drop.over{border-color:var(--accent);background:#fff6f5;color:var(--ink);}
+.stagedhead{font-size:12px;color:var(--dim);margin-bottom:10px;}
+  #staged{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:22px;}
+  .srow{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .sthumb{width:44px;height:44px;object-fit:cover;border-radius:6px;background:#f0efec;flex:none;}
+  .stitle{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;}
+  .stitle:focus{outline:none;border-color:var(--ink);}
+  .sdrop{background:none;border:none;color:var(--faint);font-size:15px;cursor:pointer;padding:4px 6px;border-radius:6px;}
+  .sdrop:hover{color:#fff;background:var(--accent);}
+  #staged .btn{margin-top:8px;}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;}
   .card{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#faf9f7;position:relative;}
   .card .thumb{aspect-ratio:1;display:block;width:100%;object-fit:cover;background:#f0efec;}
@@ -63,8 +72,9 @@
       <button class="ghost" id="logout">Iziet</button>
       <span class="count" id="count"></span>
     </div>
-    <div class="drop" id="drop">vai ievelc failus šeit — attēli un īsi video</div>
+    <div class="drop" id="drop">vai ievelc failus šeit — nosaukumus varēsi ierakstīt pirms pievienošanas</div>
     <div id="msg" class="msg"></div>
+    <div id="staged" hidden></div>
     <div class="grid" id="grid"></div>
     <div class="empty" id="empty" hidden>Vēl nav neviena darba.</div>
     <div class="hint">
@@ -117,21 +127,73 @@ async function load(){
   });
 }
 
-async function upload(files){
+// Files wait here until their names are right; nothing is sent before that.
+let staged=[];
+
+function tidy(name){
+  return String(name||'').replace(/\.[A-Za-z0-9]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function extOf(name){ const m=String(name||'').match(/\.[A-Za-z0-9]+$/); return m?m[0].toLowerCase():''; }
+function safeName(title, ext){
+  const clean=String(title||'').replace(/[\\/"'?#%]+/g,' ').replace(/\s+/g,' ').trim().slice(0,80);
+  return (clean||'bez nosaukuma')+ext;
+}
+
+function stage(files){
   const list=Array.from(files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('video/'));
   if(!list.length){ say('Der tikai attēli un video.',true); return; }
+  list.forEach(function(f){ staged.push({file:f, title:tidy(f.name), ext:extOf(f.name)}); });
+  drawStaged();
+}
+
+function drawStaged(){
+  const box=$('staged');
+  box.innerHTML='';
+  if(!staged.length){ box.hidden=true; return; }
+  box.hidden=false;
+  const head=document.createElement('div');
+  head.className='stagedhead';
+  head.textContent=staged.length===1?'1 fails gatavs — pārbaudi nosaukumu':staged.length+' faili gatavi — pārbaudi nosaukumus';
+  box.appendChild(head);
+  staged.forEach(function(it,i){
+    const row=document.createElement('div'); row.className='srow';
+    const thumb=document.createElement(it.file.type.startsWith('video/')?'video':'img');
+    thumb.className='sthumb'; thumb.src=URL.createObjectURL(it.file);
+    if(thumb.tagName==='VIDEO'){ thumb.muted=true; thumb.playsInline=true; thumb.preload='metadata'; }
+    const input=document.createElement('input');
+    input.type='text'; input.className='stitle'; input.value=it.title;
+    input.placeholder='darba nosaukums';
+    input.oninput=function(){ it.title=input.value; };
+    const drop=document.createElement('button');
+    drop.className='sdrop'; drop.type='button'; drop.textContent='×'; drop.title='Noņemt no saraksta';
+    drop.onclick=function(){ staged.splice(i,1); drawStaged(); };
+    row.append(thumb,input,drop);
+    box.appendChild(row);
+  });
+  const go=document.createElement('button');
+  go.className='btn'; go.id='send'; go.type='button';
+  go.textContent=staged.length===1?'Pievienot galerijai':'Pievienot visus';
+  go.onclick=sendStaged;
+  box.appendChild(go);
+}
+
+async function sendStaged(){
+  if(!staged.length) return;
+  const send=$('send'); if(send) send.disabled=true;
   $('pick').disabled=true;
   let done=0;
-  for(const f of list){
-    say('Augšupielādēju '+(done+1)+' no '+list.length+'…');
-    const res=await api('/api/upload?name='+encodeURIComponent(f.name),
-      {method:'POST',headers:{'content-type':f.type||'application/octet-stream'},body:f});
+  for(const it of staged.slice()){
+    say('Augšupielādēju '+(done+1)+' no '+staged.length+'…');
+    const name=safeName(it.title, it.ext);
+    const res=await api('/api/upload?name='+encodeURIComponent(name),
+      {method:'POST',headers:{'content-type':it.file.type||'application/octet-stream'},body:it.file});
     const j=await res.json().catch(()=>({}));
-    if(!res.ok){ say((f.name||'fails')+': '+(j.error||res.status),true); break; }
+    if(!res.ok){ say((name||'fails')+': '+(j.error||res.status),true); break; }
     done++;
   }
   $('pick').disabled=false;
-  if(done) say(done===list.length?'Gatavs.':'Pievienoti '+done+' no '+list.length+'.');
+  if(done===staged.length){ staged=[]; drawStaged(); say('Gatavs.'); }
+  else { staged=staged.slice(done); drawStaged(); say('Pievienoti '+done+'. Pārējie palika sarakstā.',true); }
   load();
 }
 
@@ -145,12 +207,12 @@ $('enter').onclick=async()=>{
 $('pass').addEventListener('keydown',e=>{ if(e.key==='Enter') $('enter').click(); });
 $('logout').onclick=()=>{ sessionStorage.removeItem(K); location.reload(); };
 $('pick').onclick=()=>$('file').click();
-$('file').onchange=e=>{ upload(e.target.files); e.target.value=''; };
+$('file').onchange=e=>{ stage(e.target.files); e.target.value=''; };
 
 const drop=$('drop');
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
-drop.addEventListener('drop',e=>upload(e.dataTransfer.files));
+drop.addEventListener('drop',e=>stage(e.dataTransfer.files));
 
 if(pass){ $('gate').hidden=true; $('panel').hidden=false; load(); }
 </script>
