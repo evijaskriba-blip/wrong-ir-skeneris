@@ -193,14 +193,14 @@ let dirty=false;
 
 const isVideo=it=>it && (it.kind==='video' || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(it.src||''));
 
-function videoElementFor(src){
+const videoStash=(function(){ const d=document.createElement('div'); d.style.cssText='position:fixed;left:-10px;top:-10px;width:1px;height:1px;opacity:0.01;pointer-events:none;overflow:hidden;z-index:-1'; document.body.appendChild(d); return d; })(), allVideos=[]; function wakeVideos(){ allVideos.forEach(function(v){ if(v.paused) v.play().catch(function(){}); }); } ['touchstart','pointerdown','click','visibilitychange'].forEach(function(e){ addEventListener(e, wakeVideos, {passive:true}); }); function videoElementFor(src){
   const v=document.createElement('video');
   // the file comes from the blob store, so the element has to be marked as
   // cross-origin before it can be used as a surface in the 3D scene
   v.crossOrigin='anonymous';
   v.src=src; v.muted=true; v.loop=true; v.playsInline=true; v.autoplay=true; v.preload='auto';
   v.setAttribute('muted',''); v.setAttribute('playsinline','');
-  v.setAttribute('crossorigin','anonymous');
+  v.setAttribute('crossorigin','anonymous'); v.setAttribute('webkit-playsinline',''); v.setAttribute('autoplay',''); v.setAttribute('loop',''); videoStash.appendChild(v); allVideos.push(v);
   v.play().catch(()=>{});
   return v;
 }
